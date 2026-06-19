@@ -3,7 +3,11 @@ const router = express.Router();
 const bookController = require('../controllers/bookController');
 
 const { protect } = require('../middleware/authMiddleware');
-const upload = require('../config/cloudinary');
+const upload = require('../config/cloudinary'); // Dùng để lưu ảnh bìa thật lên Cloud
+
+// BỔ SUNG: Import multer và cấu hình lưu tạm vào RAM cho AI đọc (OCR)
+const multer = require('multer');
+const uploadMemory = multer({ storage: multer.memoryStorage() });
 
 // Khai báo middleware protect. Dùng 'optional' nghĩa là không có token vẫn cho xem/tìm, nhưng có token thì sẽ được lưu hành vi.
 const jwt = require('jsonwebtoken');
@@ -22,15 +26,21 @@ const protectOptional = async (req, res, next) => {
   next();
 };
 
-// Các route cho khách/độc giả
+// ==========================================
+// CÁC ROUTE CHO KHÁCH / ĐỘC GIẢ
+// ==========================================
 router.get('/', bookController.getAllBooks);
 router.get('/search', protectOptional, bookController.searchBooks);
+
+// MỚI: Route tìm kiếm bằng hình ảnh bìa (Sử dụng uploadMemory)
+router.post('/search-image', uploadMemory.single('image'), bookController.searchByImage);
+
 router.get('/:id', protectOptional, bookController.getBookById);
 
-// CÁC ROUTE DÀNH RIÊNG CHO ADMIN (Phải có Token và Multer)
-// ĐÃ SỬA: Thêm protect và upload.single vào route POST
+// ==========================================
+// CÁC ROUTE DÀNH RIÊNG CHO ADMIN 
+// ==========================================
 router.post('/', protect, upload.single('cover_image'), bookController.createBook);
-
 router.put('/:id', protect, upload.single('cover_image'), bookController.updateBook);
 router.delete('/:id', protect, bookController.deleteBook);
 

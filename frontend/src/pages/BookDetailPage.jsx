@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
@@ -13,28 +13,102 @@ const BookDetailPage = () => {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
 
+  // 1. STATE ĐIỀU KHIỂN SỬA ĐÁNH GIÁ (INLINE EDITING)
+  const [editingId, setEditingId] = useState(null); 
+  const [editComment, setEditComment] = useState('');
+  const [editRating, setEditRating] = useState(5);
+
   // STATE ĐIỀU KHIỂN FORM MƯỢN SÁCH
   const [showBorrowForm, setShowBorrowForm] = useState(false);
   const [borrowDate, setBorrowDate] = useState('');
   const [returnDate, setReturnDate] = useState('');
   const [isBorrowing, setIsBorrowing] = useState(false);
 
+  // 2. TÁCH HÀM LẤY ĐÁNH GIÁ ĐỂ TÁI SỬ DỤNG
+  const fetchReviews = useCallback(async () => {
+    try {
+      const reviewRes = await api.get(`/reviews/${id}`);
+      setReviews(reviewRes.data);
+    } catch (error) {
+      console.error('Lỗi khi tải đánh giá:', error);
+    }
+  }, [id]);
+
   useEffect(() => {
     const fetchBookDetails = async () => {
       try {
         const bookRes = await api.get(`/books/${id}`);
         setBook(bookRes.data);
-
-        const reviewRes = await api.get(`/reviews/${id}`);
-        setReviews(reviewRes.data);
+        fetchReviews(); // Gọi hàm lấy đánh giá
       } catch (error) {
         console.error('Lỗi khi tải chi tiết sách:', error);
       }
     };
     fetchBookDetails();
-  }, [id]);
+  }, [id, fetchReviews]);
 
-  // HÀM MỚI: CHỈ MỞ FORM THAY VÌ GỌI API LUÔN
+  // ==========================================
+  // CÁC HÀM XỬ LÝ ĐÁNH GIÁ CỦA ĐỘC GIẢ
+  // ==========================================
+
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    if (!user) return alert("Vui lòng đăng nhập để đánh giá.");
+
+    try {
+      await api.post('/reviews', { book_id: id, rating, comment });
+      alert("Đánh giá thành công!");
+      setComment(''); 
+      setRating(5);
+      fetchReviews(); // Cập nhật lại danh sách ngay lập tức
+    } catch (error) {
+      alert(error.response?.data?.message || "Lỗi khi gửi đánh giá");
+    }
+  };
+
+  const handleStartEdit = (review) => {
+    setEditingId(review._id);
+    setEditComment(review.comment);
+    setEditRating(review.rating);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditComment('');
+  };
+
+  const handleUpdateReview = async (reviewId) => {
+    if (!editComment.trim()) return alert("Vui lòng nhập nội dung đánh giá.");
+    
+    try {
+      const res = await api.put(`/reviews/${reviewId}`, {
+        rating: Number(editRating),
+        comment: editComment
+      });
+      alert(res.data.message);
+      setEditingId(null); 
+      fetchReviews(); 
+    } catch (error) {
+      alert(error.response?.data?.message || "Lỗi khi cập nhật đánh giá");
+    }
+  };
+
+  const handleDeleteReview = async (reviewId) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa bài đánh giá này không?")) return;
+    
+    try {
+      const res = await api.delete(`/reviews/${reviewId}`);
+      alert(res.data.message);
+      fetchReviews(); 
+    } catch (error) {
+      alert(error.response?.data?.message || "Lỗi khi xóa đánh giá");
+    }
+  };
+
+  // ==========================================
+  // CÁC HÀM XỬ LÝ MƯỢN SÁCH & YÊU THÍCH
+  // ==========================================
+
   const handleOpenBorrowForm = () => {
     if (!user) {
       alert("Bạn cần đăng nhập để mượn sách!");
@@ -43,7 +117,6 @@ const BookDetailPage = () => {
     setShowBorrowForm(true);
   };
 
-  // HÀM MỚI: XỬ LÝ GỬI PHIẾU MƯỢN
   const submitBorrowRequest = async (e) => {
     e.preventDefault();
     if (!borrowDate || !returnDate) return alert('Vui lòng chọn đầy đủ ngày!');
@@ -51,7 +124,6 @@ const BookDetailPage = () => {
 
     setIsBorrowing(true);
     try {
-      // Gọi API tạo phiếu (điều chỉnh đường dẫn cho khớp với Backend của bạn nếu cần)
       await api.post('/borrows', { 
         book_id: id,
         expected_borrow_date: borrowDate,
@@ -59,7 +131,7 @@ const BookDetailPage = () => {
       });
       
       alert("🎉 Đã tạo phiếu mượn thành công! Vui lòng chờ Thư viện phê duyệt.");
-      setShowBorrowForm(false); // Đóng form
+      setShowBorrowForm(false); 
       setBorrowDate('');
       setReturnDate('');
       
@@ -86,25 +158,9 @@ const BookDetailPage = () => {
     }
   };
 
-  const handleReviewSubmit = async (e) => {
-    e.preventDefault();
-    if (!user) return alert("Vui lòng đăng nhập để đánh giá.");
-
-    try {
-      await api.post('/reviews', { book_id: id, rating, comment });
-      alert("Đánh giá thành công!");
-      setComment(''); 
-      
-      const reviewRes = await api.get(`/reviews/${id}`);
-      setReviews(reviewRes.data);
-    } catch (error) {
-      alert(error.response?.data?.message || "Lỗi khi gửi đánh giá");
-    }
-  };
-
   if (!book) return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#f3f4f6' }}>
-      <h2 style={{ color: '#4b5563', fontFamily: 'Arial' }}>Đang tải dữ liệu...</h2>
+      <h2 style={{ color: '#4b5563', fontFamily: "'Times New Roman', Times, serif" }}>Đang tải dữ liệu...</h2>
     </div>
   );
 
@@ -206,7 +262,7 @@ const BookDetailPage = () => {
                     </button>
                     
                     <button 
-                      onClick={handleOpenBorrowForm} // Gọi hàm mở form thay vì gửi API
+                      onClick={handleOpenBorrowForm}
                       disabled={book.available_quantity < 1}
                       style={{ 
                         padding: '14px 28px', 
@@ -230,12 +286,15 @@ const BookDetailPage = () => {
           </div>
         </div>
 
-        {/* Khu vực Đánh giá (Giữ nguyên) */}
+        {/* ======================================= */}
+        {/* KHU VỰC ĐÁNH GIÁ TỪ ĐỘC GIẢ */}
+        {/* ======================================= */}
         <div style={cardStyle}>
           <h3 style={{ color: '#111827', fontSize: '22px', fontWeight: 'bold', margin: '0 0 25px 0', borderBottom: '2px solid #f3f4f6', paddingBottom: '10px' }}>
             Đánh giá từ độc giả ({reviews.length})
           </h3>
           
+          {/* FORM THÊM ĐÁNH GIÁ MỚI */}
           {user?.role === 'admin' ? (
             <div style={{ backgroundColor: '#fffbeb', padding: '20px', borderRadius: '8px', border: '1px solid #fde047', color: '#b45309', marginBottom: '40px', fontWeight: 'bold' }}>
               ⚠️ Bạn đang đăng nhập bằng tài khoản Quản trị viên. Tính năng tương tác bình luận và mượn sách chỉ dành cho Độc giả.
@@ -280,6 +339,7 @@ const BookDetailPage = () => {
             </div>
           )}
 
+          {/* DANH SÁCH ĐÁNH GIÁ (CÓ CHỨC NĂNG SỬA/XÓA) */}
           {reviews.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af' }}>
               <span style={{ fontSize: '40px', display: 'block', marginBottom: '10px' }}>💬</span>
@@ -287,27 +347,84 @@ const BookDetailPage = () => {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {reviews.map((rev) => (
-                <div key={rev._id} style={{ display: 'flex', gap: '15px', paddingBottom: '20px', borderBottom: '1px solid #f3f4f6' }}>
-                  <div style={{ width: '45px', height: '45px', backgroundColor: '#e0e7ff', color: '#4f46e5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 'bold', flexShrink: 0 }}>
-                    {(rev.user_id?.fullName || rev.user_id?.username || 'U').charAt(0).toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <strong style={{ color: '#111827', fontSize: '16px' }}>{rev.user_id?.fullName || rev.user_id?.username || 'Người dùng ẩn danh'}</strong>
-                      <span style={{ color: '#9ca3af', fontSize: '14px' }}>
-                        {new Date(rev.createdAt).toLocaleDateString('vi-VN')}
-                      </span>
+              {reviews.map((rev) => {
+                const isOwner = user && rev.user_id?._id === user._id;
+                const isCurrentEditing = editingId === rev._id;
+
+                return (
+                  <div key={rev._id} style={{ display: 'flex', gap: '15px', paddingBottom: '20px', borderBottom: '1px solid #f3f4f6' }}>
+                    <div style={{ width: '45px', height: '45px', backgroundColor: '#e0e7ff', color: '#4f46e5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 'bold', flexShrink: 0 }}>
+                      {(rev.user_id?.fullName || rev.user_id?.username || 'U').charAt(0).toUpperCase()}
                     </div>
-                    <div style={{ color: '#fbbf24', fontSize: '16px', marginBottom: '8px' }}>
-                      {'★'.repeat(rev.rating)}{'☆'.repeat(5 - rev.rating)}
+                    
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <strong style={{ color: '#111827', fontSize: '16px' }}>{rev.user_id?.fullName || rev.user_id?.username || 'Người dùng ẩn danh'}</strong>
+                        <span style={{ color: '#9ca3af', fontSize: '14px' }}>
+                          {new Date(rev.createdAt).toLocaleDateString('vi-VN')}
+                        </span>
+                      </div>
+
+                      {/* NẾU ĐANG BẤM SỬA BÀI NÀY */}
+                      {isCurrentEditing ? (
+                        <div style={{ backgroundColor: '#f9fafb', padding: '15px', borderRadius: '8px', border: '1px dashed #d1d5db', marginTop: '10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                            <label style={{ fontWeight: 'bold', fontSize: '14px' }}>Sửa số sao:</label>
+                            <select 
+                              value={editRating} 
+                              onChange={(e) => setEditRating(e.target.value)}
+                              style={{ padding: '6px', borderRadius: '6px', border: '1px solid #d1d5db', fontFamily: "'Times New Roman', Times, serif" }}
+                            >
+                              {[5, 4, 3, 2, 1].map(num => <option key={num} value={num}>{num} sao</option>)}
+                            </select>
+                          </div>
+                          <textarea 
+                            value={editComment}
+                            onChange={(e) => setEditComment(e.target.value)}
+                            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #4f46e5', minHeight: '80px', boxSizing: 'border-box', fontFamily: "'Times New Roman', Times, serif", fontSize: '15px', marginBottom: '10px' }}
+                          />
+                          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                            <button onClick={() => handleUpdateReview(rev._id)} style={{ backgroundColor: '#10b981', color: 'white', padding: '6px 14px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontFamily: "'Times New Roman', Times, serif" }}>
+                              Lưu
+                            </button>
+                            <button onClick={handleCancelEdit} style={{ backgroundColor: '#9ca3af', color: 'white', padding: '6px 14px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontFamily: "'Times New Roman', Times, serif" }}>
+                              Hủy
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* HIỂN THỊ BÌNH THƯỜNG */
+                        <>
+                          <div style={{ color: '#fbbf24', fontSize: '16px', marginBottom: '8px' }}>
+                            {'★'.repeat(rev.rating)}{'☆'.repeat(5 - rev.rating)}
+                          </div>
+                          <p style={{ margin: 0, color: '#4b5563', fontSize: '16px', lineHeight: '1.5', fontStyle: rev.status === 'hidden' ? 'italic' : 'normal' }}>
+                            {rev.comment}
+                          </p>
+
+                          {/* HIỂN THỊ 2 NÚT THAO TÁC NẾU LÀ CHÍNH CHỦ */}
+                          {isOwner && (
+                            <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
+                              <button 
+                                onClick={() => handleStartEdit(rev)}
+                                style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', padding: 0, fontFamily: "'Times New Roman', Times, serif" }}
+                              >
+                                ✏️ Sửa bài
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteReview(rev._id)}
+                                style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', padding: 0, fontFamily: "'Times New Roman', Times, serif" }}
+                              >
+                                🗑️ Xóa bài
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
-                    <p style={{ margin: 0, color: '#4b5563', fontSize: '16px', lineHeight: '1.5', fontStyle: rev.status === 'hidden' ? 'italic' : 'normal' }}>
-                      {rev.comment}
-                    </p>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -319,7 +436,6 @@ const BookDetailPage = () => {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ backgroundColor: '#fff', padding: '30px', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', width: '100%', maxWidth: '450px', position: 'relative' }}>
             
-            {/* Nút tắt Modal */}
             <button 
               onClick={() => setShowBorrowForm(false)}
               style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#6b7280' }}

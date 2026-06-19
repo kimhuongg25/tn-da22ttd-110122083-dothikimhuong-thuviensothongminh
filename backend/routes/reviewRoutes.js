@@ -12,4 +12,6 @@ router.get('/:book_id', reviewController.getBookReviews);
 router.get('/admin/all', protect, reviewController.getAllReviewsAdmin);
 // Xóa một đánh giá vi phạm (Dành cho Admin)
 router.put('/:id/toggle-visibility', protect, reviewController.toggleReviewVisibilityAdmin);
+router.put('/:id', protect, reviewController.updateReview);
+router.delete('/:id', protect, reviewController.deleteReview);
 module.exports = router;
