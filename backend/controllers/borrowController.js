@@ -21,6 +21,21 @@ exports.borrowBook = async (req, res) => {
       return res.status(400).json({ message: "Sách này hiện đã hết trong kho." });
     }
 
+    // ==========================================
+    // LOGIC MỚI: KIỂM TRA GIỚI HẠN MƯỢN TỐI ĐA 3 CUỐN
+    // ==========================================
+    const activeBorrowsCount = await BorrowRecord.countDocuments({
+      user_id: user_id,
+      status: { $in: ['pending', 'approved', 'borrowed'] } 
+    });
+
+    if (activeBorrowsCount >= 3) {
+      return res.status(400).json({ 
+        message: "Bạn đã đạt giới hạn mượn tối đa 3 cuốn sách cùng lúc. Vui lòng hoàn trả sách cũ trước khi mượn thêm!" 
+      });
+    }
+    // ==========================================
+
     const alreadyPending = await BorrowRecord.findOne({ 
       user_id, 
       book_id, 
