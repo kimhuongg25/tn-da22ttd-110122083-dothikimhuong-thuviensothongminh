@@ -16,9 +16,12 @@ const ManageBorrowsPage = () => {
   // --- 2. STATE DÀNH RIÊNG CHO HỘP THOẠI TRẢ SÁCH (MODAL) ---
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [currentRecord, setCurrentRecord] = useState(null);
-  const [damageFine, setDamageFine] = useState(0); 
-  const [damageReason, setDamageReason] = useState(''); // MỚI: State lưu lý do phạt
   const [paymentStatus, setPaymentStatus] = useState('paid'); 
+  
+  // LOGIC MỚI: State quản lý lý do và mức phạt tự động
+  const [damageLevel, setDamageLevel] = useState('none');
+  const [customReason, setCustomReason] = useState('');
+  const [damageFine, setDamageFine] = useState(0); 
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
@@ -61,8 +64,10 @@ const ManageBorrowsPage = () => {
     } 
     else if (newStatus === 'returned') {
       setCurrentRecord(record);
+      // Reset toàn bộ form phạt khi mở hộp thoại mới
+      setDamageLevel('none');
+      setCustomReason('');
       setDamageFine(0); 
-      setDamageReason(''); // Đặt lại lý do trống mỗi lần mở
       setPaymentStatus('paid'); 
       setIsReturnModalOpen(true); 
       return; 
@@ -77,15 +82,57 @@ const ManageBorrowsPage = () => {
     }
   };
 
+  // HÀM XỬ LÝ KHI CHỌN MỨC ĐỘ HƯ HỎNG TỪ DROPDOWN
+  const handleDamageLevelChange = (e) => {
+    const level = e.target.value;
+    setDamageLevel(level);
+    
+    const bookPrice = currentRecord?.book_id?.book_price || 0;
+    if (bookPrice === 0 && level !== 'none' && level !== 'other') {
+      alert("⚠️ Hệ thống chưa có dữ liệu giá gốc của cuốn sách này. Vui lòng nhập số tiền phạt thủ công!");
+    }
+
+    switch (level) {
+      case 'none':
+        setDamageFine(0);
+        setCustomReason('');
+        break;
+      case 'minor':
+        setDamageFine(bookPrice * 0.2); // Phạt 20%
+        break;
+      case 'moderate':
+        setDamageFine(bookPrice * 0.5); // Phạt 50%
+        break;
+      case 'severe':
+        setDamageFine(bookPrice * 1.0); // Phạt 100% (Mất sách)
+        break;
+      case 'other':
+        setDamageFine(0); // Để Admin tự gõ
+        break;
+      default:
+        setDamageFine(0);
+    }
+  };
+
   const submitReturnBook = async () => {
     try {
-      // BỔ SUNG: Truyền thêm damageReason xuống Backend
+      // Xác định lý do chuỗi text cuối cùng để gửi xuống DB
+      let finalReason = '';
+      if (damageLevel === 'minor') finalReason = 'Rách bìa / Trầy xước nhẹ';
+      else if (damageLevel === 'moderate') finalReason = 'Rách, mất vài trang / Ướt sách';
+      else if (damageLevel === 'severe') finalReason = 'Mất sách / Hư hỏng hoàn toàn';
+      else if (damageLevel === 'other') finalReason = customReason;
+
+      if (damageLevel === 'other' && Number(damageFine) > 0 && !customReason.trim()) {
+        return alert("Vui lòng nhập lý do phạt tùy chỉnh!");
+      }
+
       await api.put(`/borrows/admin/status/${currentRecord._id}`, { 
         status: 'returned',
         fine: { 
           amount: Number(damageFine) || 0,
           status: paymentStatus,
-          damageReason: damageReason 
+          damageReason: finalReason 
         } 
       });
       
@@ -162,8 +209,6 @@ const ManageBorrowsPage = () => {
     }
   };
 
-  if (!user || user.role !== 'admin') return null;
-
   const actionBtnStyle = {
     padding: '8px 14px', border: 'none', borderRadius: '6px', cursor: 'pointer',
     fontWeight: 'bold', fontSize: '14px', transition: 'all 0.2s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
@@ -193,7 +238,7 @@ const ManageBorrowsPage = () => {
           </div>
         </div>
 
-        {/* --- KHU VỰC THANH CÔNG CỤ TÌM KIẾM & LỌC --- */}
+        {/* KHU VỰC TÌM KIẾM & LỌC */}
         <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', backgroundColor: '#ffffff', padding: '20px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
           <div style={{ flex: 2 }}>
             <label style={{ display: 'block', fontSize: '15px', fontWeight: 'bold', color: '#374151', marginBottom: '8px' }}>🔍 Tìm kiếm phiếu mượn</label>
@@ -295,10 +340,9 @@ const ManageBorrowsPage = () => {
             </table>
           </div>
         </div>
-
       </div>
 
-      {/* --- GIAO DIỆN HỘP THOẠI TRẢ SÁCH (TỰ ĐỘNG TÍNH TOÁN & THU TIỀN) --- */}
+      {/* --- GIAO DIỆN HỘP THOẠI TRẢ SÁCH (TỰ ĐỘNG TÍNH TOÁN THEO LÝ DO) --- */}
       {isReturnModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
           <div style={{ backgroundColor: '#ffffff', padding: '30px', borderRadius: '16px', width: '500px', maxWidth: '90%', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', border: '1px solid #e5e7eb' }}>
@@ -310,6 +354,7 @@ const ManageBorrowsPage = () => {
             <div style={{ marginBottom: '20px', fontSize: '16px', color: '#374151', lineHeight: '1.8' }}>
               <p style={{ margin: '5px 0' }}>Độc giả: <strong>{currentRecord?.user_id?.fullName || currentRecord?.user_id?.username}</strong></p>
               <p style={{ margin: '5px 0' }}>Tên sách: <strong style={{ color: '#4f46e5' }}>{currentRecord?.book_id?.title}</strong></p>
+              <p style={{ margin: '5px 0' }}>Giá sách: <strong style={{ color: '#10b981' }}>{(currentRecord?.book_id?.book_price || 0).toLocaleString('vi-VN')} VNĐ</strong></p>
               
               <div style={{ backgroundColor: '#f9fafb', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb', marginTop: '15px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
@@ -341,32 +386,50 @@ const ManageBorrowsPage = () => {
               </div>
             </div>
 
+            {/* KHU VỰC MỚI: CHỌN LÝ DO ĐỂ TỰ ĐỘNG TÍNH TIỀN */}
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#374151', fontSize: '15px' }}>Phí phạt do hư hỏng / mất sách (nếu có):</label>
-              <input 
-                type="number" 
-                min="0"
-                value={damageFine} 
-                onChange={(e) => setDamageFine(e.target.value)} 
-                placeholder="Nhập 0 nếu sách nguyên vẹn"
-                style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', border: '2px solid #e5e7eb', outline: 'none', fontSize: '16px', boxSizing: 'border-box', marginBottom: Number(damageFine) > 0 ? '10px' : '0', transition: 'border-color 0.2s', color: '#111827', fontWeight: 'bold', fontFamily: "'Times New Roman', Times, serif" }}
-                onFocus={(e) => e.target.style.borderColor = '#4f46e5'}
-                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
-              />
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#374151', fontSize: '15px' }}>Tình trạng sách khi trả:</label>
               
-              {/* BỔ SUNG: Ô nhập lý do phạt hiển thị tự động khi có tiền phạt */}
-              {Number(damageFine) > 0 && (
+              <select 
+                value={damageLevel}
+                onChange={handleDamageLevelChange}
+                style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', border: '2px solid #e5e7eb', outline: 'none', fontSize: '16px', boxSizing: 'border-box', marginBottom: '10px', backgroundColor: '#f9fafb', cursor: 'pointer', fontFamily: "'Times New Roman', Times, serif" }}
+              >
+                <option value="none">Sách nguyên vẹn (Không phạt)</option>
+                <option value="minor">Rách bìa / Trầy xước nhẹ (Phạt 20%)</option>
+                <option value="moderate">Rách, mất vài trang / Ướt sách (Phạt 50%)</option>
+                <option value="severe">Mất sách / Hư hỏng hoàn toàn (Phạt 100%)</option>
+                <option value="other">Lý do khác</option>
+              </select>
+
+              {/* Nếu chọn Lý do khác -> Hiện ô nhập lý do */}
+              {damageLevel === 'other' && (
                 <input 
                   type="text" 
-                  value={damageReason} 
-                  onChange={(e) => setDamageReason(e.target.value)} 
-                  placeholder="Nhập lý do phạt (VD: Rách bìa, Mất trang...)"
-                  style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', border: '2px solid #fca5a5', outline: 'none', fontSize: '16px', boxSizing: 'border-box', backgroundColor: '#fff1f2', color: '#991b1b', fontWeight: 'bold', fontFamily: "'Times New Roman', Times, serif" }}
+                  value={customReason} 
+                  onChange={(e) => setCustomReason(e.target.value)} 
+                  placeholder="Ghi chú chi tiết lý do hư hỏng..."
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', border: '2px solid #fca5a5', outline: 'none', fontSize: '16px', boxSizing: 'border-box', backgroundColor: '#fff1f2', color: '#991b1b', marginBottom: '10px', fontFamily: "'Times New Roman', Times, serif" }}
                 />
+              )}
+
+              {/* Ô Tiền phạt (Tự động điền nhưng vẫn cho phép sửa chữa thủ công) */}
+              {damageLevel !== 'none' && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', border: '1px solid #d1d5db', borderRadius: '8px', overflow: 'hidden' }}>
+                  <span style={{ backgroundColor: '#f3f4f6', padding: '12px 15px', color: '#4b5563', fontWeight: 'bold', borderRight: '1px solid #d1d5db' }}>Tiền phạt:</span>
+                  <input 
+                    type="number" 
+                    min="0"
+                    value={damageFine} 
+                    onChange={(e) => setDamageFine(e.target.value)} 
+                    style={{ flex: 1, border: 'none', padding: '12px 14px', outline: 'none', fontSize: '16px', color: '#dc2626', fontWeight: 'bold', fontFamily: "'Times New Roman', Times, serif" }}
+                  />
+                  <span style={{ padding: '0 15px', color: '#6b7280', fontWeight: 'bold' }}>VNĐ</span>
+                </div>
               )}
             </div>
 
-            {/* TỔNG TIỀN PHẠT & LỰA CHỌN THANH TOÁN (Chỉ hiện khi có phát sinh tiền phạt) */}
+            {/* TỔNG TIỀN PHẠT & LỰA CHỌN THANH TOÁN */}
             {(calculateOverdueInfo().fine + Number(damageFine) > 0) && (
               <div style={{ backgroundColor: '#fff1f2', padding: '15px', borderRadius: '8px', border: '1px solid #fecdd3', marginBottom: '25px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', color: '#be123c', fontWeight: 'bold', marginBottom: '15px' }}>
