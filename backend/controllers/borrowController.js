@@ -413,23 +413,26 @@ exports.payFine = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy thông tin phạt." });
     }
 
-    // 1. Cập nhật trạng thái phiếu phạt thành 'paid' (Đã thanh toán)
+    // 1. CẬP NHẬT TRỰC TIẾP VÀO DATABASE (KHẮC PHỤC LỖI MONGOOSE KHÔNG NHẬN DIỆN OBJECT LỒNG)
     record.fine.status = 'paid';
-    await record.save();
+    await BorrowRecord.findByIdAndUpdate(recordId, { 
+      $set: { "fine.status": "paid" } 
+    });
 
     // 2. KIỂM TRA ĐỂ TỰ ĐỘNG MỞ KHÓA TÀI KHOẢN
-    // Lưu ý: Do đã populate user_id ở trên, nên ta phải trỏ vào record.user_id._id
+    // Thêm $ne (Not Equal) để loại trừ chính cái phiếu vừa thanh toán ra khỏi bộ đếm
     const remainingUnpaid = await BorrowRecord.countDocuments({
       user_id: record.user_id._id,
+      _id: { $ne: recordId }, // <--- ĐÂY LÀ CHÌA KHÓA GIẢI QUYẾT LỖI
       $or: [
         { "fine.status": 'unpaid' },
         { status: 'overdue' }
       ]
     });
 
-    // 3. Nếu KHÔNG còn khoản nợ nào -> Mở khóa thẻ ngay lập tức
+    // 3. Nếu KHÔNG còn khoản nợ nào khác -> Mở khóa thẻ ngay lập tức
     let unlockMessage = "";
-    let isUnlocked = false; // Biến kiểm soát trạng thái để báo vào Email
+    let isUnlocked = false; 
 
     if (remainingUnpaid === 0) {
       await User.findByIdAndUpdate(record.user_id._id, { status: 'active' });
