@@ -52,7 +52,7 @@ const SearchableDropdown = ({ options = [], value, onChange, placeholder }) => {
               <input
                 type="text"
                 autoFocus
-                placeholder="🔍"
+                placeholder="🔍 Nhập từ khóa để lọc..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #4f46e5', outline: 'none', boxSizing: 'border-box', fontFamily: "'Times New Roman', Times, serif", fontSize: '14px' }}
@@ -93,19 +93,37 @@ const AdminPage = () => {
   const [books, setBooks] = useState([]);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const filteredBooks = books.filter(book => 
-    (book.title && book.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (book.author && book.author.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+
+  // LOGIC LỌC SÁCH NÂNG CẤP: TÌM KIẾM TOÀN CẦU (GLOBAL MULTI-FIELD SEARCH)
+  const filteredBooks = books.filter(book => {
+    const searchLower = searchTerm.toLowerCase().trim();
+    if (!searchLower) return true;
+
+    const categoryName = book.category_id?.category_name || 
+                         categories.find(c => c._id === book.category_id)?.category_name || 
+                         book.genre || '';
+
+    const priceStr = book.book_price ? book.book_price.toString() : '0';
+    const quantityStr = book.available_quantity ? book.available_quantity.toString() : '0';
+    const publishYearStr = book.publish_year ? book.publish_year.toString() : '';
+
+    return (
+      (book.title && book.title.toLowerCase().includes(searchLower)) ||
+      (book.author && book.author.toLowerCase().includes(searchLower)) ||
+      (categoryName && categoryName.toLowerCase().includes(searchLower)) ||
+      (book.publisher && book.publisher.toLowerCase().includes(searchLower)) ||
+      (publishYearStr && publishYearStr.includes(searchLower)) ||
+      (priceStr && priceStr.includes(searchLower)) ||
+      (book.shelf_location && book.shelf_location.toLowerCase().includes(searchLower)) ||
+      (quantityStr && quantityStr.includes(searchLower))
+    );
+  });
   
   const [categories, setCategories] = useState([]);
-  
   const [showAddForm, setShowAddForm] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
-  
   const [isEditing, setIsEditing] = useState(false);
   const [editBookId, setEditBookId] = useState(null);
-  
   const [coverFile, setCoverFile] = useState(null);
 
   const [zone, setZone] = useState('Khu A');
@@ -326,7 +344,6 @@ const AdminPage = () => {
 
   if (!user || user.role !== 'admin') return null;
 
-  // CÁC MẢNG DỮ LIỆU ĐỂ BẮT VÀO DROPDOWN TÌM KIẾM
   const categoryOptions = categories.map(c => ({ value: c._id, label: c.category_name }));
   
   const zoneOptions = [
@@ -340,15 +357,20 @@ const AdminPage = () => {
 
   const shelfOptions = [...Array(30)].map((_, i) => {
     const num = (i + 1).toString().padStart(2, '0');
-    return { value: `Kệ ${num}`, label: `Tủ / Kệ ${num}` };
+    return { value: `Kệ ${num}`, label: `Kệ ${num}` };
   });
 
   const tierOptions = [
-    { value: 'Ngăn 01', label: 'Ngăn 01 (Trên cùng)' },
+    { value: 'Ngăn 01', label: 'Ngăn 01' },
     { value: 'Ngăn 02', label: 'Ngăn 02' },
-    { value: 'Ngăn 03', label: 'Ngăn 03 (Vừa tầm mắt)' },
+    { value: 'Ngăn 03', label: 'Ngăn 03' },
     { value: 'Ngăn 04', label: 'Ngăn 04' },
-    { value: 'Ngăn 05', label: 'Ngăn 05 (Dưới cùng)' },
+    { value: 'Ngăn 05', label: 'Ngăn 05' },
+    { value: 'Ngăn 06', label: 'Ngăn 06' },
+    { value: 'Ngăn 07', label: 'Ngăn 07' },
+    { value: 'Ngăn 08', label: 'Ngăn 08' },
+    { value: 'Ngăn 09', label: 'Ngăn 09' },
+    { value: 'Ngăn 10', label: 'Ngăn 10' },
   ];
 
   const inputStyle = { width: '100%', padding: '12px 14px', marginTop: '6px', border: '1px solid #d1d5db', borderRadius: '8px', backgroundColor: '#f9fafb', fontSize: '15px', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s ease-in-out', fontFamily: "'Times New Roman', Times, serif" };
@@ -379,15 +401,25 @@ const AdminPage = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', padding: '20px 24px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '24px', flexWrap: 'wrap', gap: '15px' }}>
           <h3 style={{ margin: 0, color: '#1f2937', fontSize: '18px', fontFamily: "'Times New Roman', Times, serif" }}>Kho Sách Hiện Tại</h3>
           
-          <div style={{ flex: '1', minWidth: '250px', maxWidth: '400px', position: 'relative' }}>
-            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>🔍</span>
-            <input 
-              type="text" 
-              placeholder="Tìm tên sách hoặc tác giả..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ width: '100%', padding: '10px 10px 10px 36px', borderRadius: '8px', border: '1px solid #d1d5db', outline: 'none', fontFamily: "'Times New Roman', Times, serif", fontSize: '15px', backgroundColor: '#f9fafb', boxSizing: 'border-box' }}
-            />
+          <div style={{ flex: '1', minWidth: '320px', maxWidth: '480px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <div style={{ flex: '1', position: 'relative' }}>
+              <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>🔍</span>
+              <input 
+                type="text" 
+                placeholder="Tìm kiếm theo tên, tác giả, kệ, giá..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{ width: '100%', padding: '10px 10px 10px 36px', borderRadius: '8px', border: '1px solid #d1d5db', outline: 'none', fontFamily: "'Times New Roman', Times, serif", fontSize: '15px', backgroundColor: '#f9fafb', boxSizing: 'border-box' }}
+              />
+            </div>
+            
+            <button 
+              type="button" 
+              onClick={() => setSearchTerm('')} 
+              style={{ ...btnStyle, backgroundColor: '#ffffff', color: '#4b5563', border: '1px solid #d1d5db', padding: '10px 14px', whiteSpace: 'nowrap', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+            >
+              ⬅ Quay về
+            </button>
           </div>
 
           <button onClick={() => showAddForm ? resetForm() : setShowAddForm(true)} style={{ ...btnStyle, backgroundColor: showAddForm ? '#f3f4f6' : '#10b981', color: showAddForm ? '#374151' : 'white', boxShadow: showAddForm ? 'none' : '0 4px 6px rgba(16, 185, 129, 0.2)' }}>
@@ -416,7 +448,6 @@ const AdminPage = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               <div><label style={labelStyle}>Tác giả:</label><input type="text" value={newBook.author} onChange={(e) => setNewBook({...newBook, author: e.target.value})} required style={inputStyle} /></div>
               
-              {/* DROPDOWN TÌM KIẾM DANH MỤC */}
               <div style={{ marginTop: '6px' }}>
                 <label style={labelStyle}>🗂️ Danh Mục Hệ Thống:</label>
                 <div style={{ marginTop: '6px' }}>
@@ -440,7 +471,6 @@ const AdminPage = () => {
                 <input type="number" min="0" value={newBook.book_price} onChange={(e) => setNewBook({...newBook, book_price: e.target.value})} required style={inputStyle} />
               </div>
 
-              {/* DROPDOWN TÌM KIẾM VỊ TRÍ KỆ */}
               <div style={{ marginBottom: '16px', gridColumn: 'span 2' }}>
                 <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px', color: '#374151', fontSize: '14px' }}>
                   📍 Vị trí lưu trữ sách (Khu - Kệ - Ngăn)

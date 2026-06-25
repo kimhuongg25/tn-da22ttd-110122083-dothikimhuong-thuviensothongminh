@@ -17,17 +17,21 @@ import ManageReviewsPage from './pages/ManageReviewsPage';
 // IMPORT CHATBOT WIDGET VÀO APP
 import ChatbotWidget from './components/ChatbotWidget';
 
-// BỔ SUNG: Import component ScrollToTop
+// Import component ScrollToTop (Xử lý reset cuộn khi chuyển trang)
 import ScrollToTop from './components/ScrollToTop';
 import ManageFinesPage from './pages/ManageFinesPage';
 
-// 1. IMPORT COMPONENT NỘI QUY THƯ VIỆN (DẤU ?) MỚI TẠO
+// IMPORT COMPONENT NỘI QUY THƯ VIỆN (DẤU ?) MỚI TẠO
 import LibraryRules from './components/LibraryRules';
+
+// BỔ SUNG: IMPORT NÚT MŨI TÊN ĐẨY LÊN ĐẦU TRANG VỪA TẠO
+import ScrollToTopButton from './components/ScrollToTopButton';
+
 
 function App() {
   return (
     <Router>
-      {/* ĐẶT Ở ĐÂY: Có hiệu lực tự động kéo lên đầu trang cho toàn bộ hệ thống */}
+      {/* CÓ SẴN: Tự động kéo lên đầu trang khi chuyển qua đường dẫn (route) mới */}
       <ScrollToTop />
       
       <Navbar /> 
@@ -55,8 +59,11 @@ function App() {
       {/* ĐẶT CHATBOT Ở ĐÂY (Nằm ngoài Routes để nó luôn hiển thị ở mọi trang) */}
       <ChatbotWidget />
       
-      {/* 2. ĐẶT NÚT NỘI QUY Ở ĐÂY (Sẽ trôi nổi ở góc dưới bên trái) */}
+      {/* ĐẶT NÚT NỘI QUY Ở ĐÂY (Sẽ trôi nổi ở góc dưới bên trái) */}
       <LibraryRules />
+
+      {/* BỔ SUNG: NÚT MŨI TÊN CUỘN TRANG (Trôi nổi ở góc dưới bên phải, trên Chatbot) */}
+      <ScrollToTopButton />
       
     </Router>
   );
